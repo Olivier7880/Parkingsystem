@@ -1,5 +1,6 @@
 package com.parkit.parkingsystem.service;
 
+import com.parkit.parkingsystem.config.DataBaseConfig;
 import com.parkit.parkingsystem.constants.ParkingType;
 import com.parkit.parkingsystem.dao.ParkingSpotDAO;
 import com.parkit.parkingsystem.dao.TicketDAO;
@@ -9,6 +10,9 @@ import com.parkit.parkingsystem.util.InputReaderUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Date;
 
 public class ParkingService {
@@ -20,6 +24,8 @@ public class ParkingService {
     private InputReaderUtil inputReaderUtil;
     private ParkingSpotDAO parkingSpotDAO;
     private  TicketDAO ticketDAO;
+    
+    public Object recurringUsers;
 
     public ParkingService(InputReaderUtil inputReaderUtil, ParkingSpotDAO parkingSpotDAO, TicketDAO ticketDAO){
         this.inputReaderUtil = inputReaderUtil;
@@ -32,6 +38,9 @@ public class ParkingService {
             ParkingSpot parkingSpot = getNextParkingNumberIfAvailable();
             if(parkingSpot !=null && parkingSpot.getId() > 0){
                 String vehicleRegNumber = getVehichleRegNumber();
+                if (recurringUsers(vehicleRegNumber) >= 1) {
+					System.out.println("Welcome back! As a recurring user of our parking lot, you'll benefit from a 5% discount");
+				}
                 parkingSpot.setAvailable(false);
                 parkingSpotDAO.updateParking(parkingSpot);//allot this parking space and mark it's availability as false
 
@@ -54,7 +63,23 @@ public class ParkingService {
         }
     }
 
-    private String getVehichleRegNumber() throws Exception {
+    private int recurringUsers(String vehicleRegNumber) throws Exception {
+    	Connection con = null;
+		DataBaseConfig dataBaseConfig = new DataBaseConfig();
+
+		con = dataBaseConfig.getConnection();
+
+		String sql = "SELECT COUNT(*) AS total FROM ticket WHERE VEHICLE_REG_NUMBER=?";
+
+		PreparedStatement statement = con.prepareStatement(sql);
+		statement.setString(1, vehicleRegNumber);
+		ResultSet rs = statement.executeQuery();
+		rs.next();
+
+		return rs.getInt("total");
+	}
+
+	private String getVehichleRegNumber() throws Exception {
         System.out.println("Please type the vehicle registration number and press enter key");
         return inputReaderUtil.readVehicleRegistrationNumber();
     }
@@ -103,7 +128,10 @@ public class ParkingService {
             Ticket ticket = ticketDAO.getTicket(vehicleRegNumber);
             Date outTime = new Date();
             ticket.setOutTime(outTime);
-            fareCalculatorService.calculateFare(ticket);
+            
+            int recurring = recurringUsers(vehicleRegNumber);
+            fareCalculatorService.calculateFare(ticket, recurring);
+            
             if(ticketDAO.updateTicket(ticket)) {
                 ParkingSpot parkingSpot = ticket.getParkingSpot();
                 parkingSpot.setAvailable(true);

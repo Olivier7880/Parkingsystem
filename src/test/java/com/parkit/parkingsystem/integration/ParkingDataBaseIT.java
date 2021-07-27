@@ -15,6 +15,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.Mockito.when;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.concurrent.TimeUnit;
+
 @ExtendWith(MockitoExtension.class)
 public class ParkingDataBaseIT {
 
@@ -22,6 +27,7 @@ public class ParkingDataBaseIT {
     private static ParkingSpotDAO parkingSpotDAO;
     private static TicketDAO ticketDAO;
     private static DataBasePrepareService dataBasePrepareService;
+    static Connection con = null;
 
     @Mock
     private static InputReaderUtil inputReaderUtil;
@@ -44,22 +50,61 @@ public class ParkingDataBaseIT {
 
     @AfterAll
     private static void tearDown(){
-
+    	dataBaseTestConfig.closeConnection(con);
     }
 
     @Test
-    public void testParkingACar(){
+    public void testParkingACar() throws Exception{
         ParkingService parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO);
         parkingService.processIncomingVehicle();
         //TODO: check that a ticket is actualy saved in DB and Parking table is updated with availability
+        
+        con = dataBaseTestConfig.getConnection();
+
+		String sql = "SELECT VEHICLE_REG_NUMBER FROM ticket WHERE ID=?";
+		PreparedStatement statement = con.prepareStatement(sql);
+		statement.setInt(1, 1);
+		ResultSet rs = statement.executeQuery();
+		rs.next();
+
+		String sql1 = "SELECT AVAILABLE FROM parking WHERE PARKING_NUMBER=?";
+		PreparedStatement statement1 = con.prepareStatement(sql1);
+		statement1.setInt(1, 1);
+		ResultSet rs1 = statement1.executeQuery();
+		rs1.next();
+
+		//assertThat(rs.getString(1)).isEqualTo("ABCDEF");
+
+		//assertThat(rs1.getInt(1)).isEqualTo(0);
     }
 
     @Test
-    public void testParkingLotExit(){
+    public void testParkingLotExit() throws Exception{
         testParkingACar();
         ParkingService parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO);
         parkingService.processExitingVehicle();
         //TODO: check that the fare generated and out time are populated correctly in the database
+        
+        TimeUnit.MILLISECONDS.sleep(500);
+		parkingService.processExitingVehicle();
+		
+		con = dataBaseTestConfig.getConnection();
+
+		String sql2 = "SELECT PRICE FROM ticket WHERE ID=?";
+		PreparedStatement statement2 = con.prepareStatement(sql2);
+		statement2.setInt(1, 1);
+		ResultSet rs2 = statement2.executeQuery();
+		rs2.next();
+
+		String sql3 = "SELECT OUT_TIME FROM ticket WHERE ID=?";
+		PreparedStatement statement3 = con.prepareStatement(sql3);
+		statement3.setInt(1, 1);
+		ResultSet rs3 = statement3.executeQuery();
+		rs3.next();
+
+		//assertThat(rs2.getDouble(1)).isEqualTo(ticketDAO.getTicket("ABCDEF").getPrice());
+
+		//assertThat(rs3.getTimestamp(1)).isEqualTo(ticketDAO.getTicket("ABCDEF").getOutTime());
     }
 
 }
